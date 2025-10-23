@@ -1,0 +1,92 @@
+<nav class="navbar">
+  <div class="logo">
+    <img
+      src="assets/images/burgerimage1.jpg"
+      alt="Logo"
+      class="logo-image"
+      routerLink="/burgerspage"
+    />
+    BurgerManager
+  </div>
+
+  <div class="navbar-buttons">
+    <ng-container *ngIf="authService.isLoggedIn(); else notLoggedIn">
+      <!-- Bouton Admin Menu -->
+      <button mat-button [matMenuTriggerFor]="adminMenu" class="btn btn-orange">
+        Admin
+      </button>
+
+      <mat-menu #adminMenu="matMenu" panelClass="custom-admin-menu-orange">
+        <button
+          mat-menu-item
+          (click)="onRedButtonClick()"
+          class="btn btn-orange"
+          style="background-color: rgb(100, 67, 4)"
+        >
+          Activation
+        </button>
+        <mat-divider></mat-divider>
+        <button
+          mat-menu-item
+          routerLink="/cookies"
+          class="btn btn-orange"
+          style="background-color: rgb(106, 0, 255)"
+        >
+          Theme
+        </button>
+        <mat-divider></mat-divider>
+        <button
+          mat-menu-item
+          routerLink="/desserts"
+          class="btn btn-orange"
+          style="background-color: orange"
+        >
+          Desserts
+        </button>
+        <mat-divider></mat-divider>
+        <button
+          mat-menu-item
+          routerLink="/burgers"
+          class="btn btn-orange"
+          style="background-color: orange"
+        >
+          Burgers
+        </button>
+        <mat-divider></mat-divider>
+        <button
+          mat-menu-item
+          routerLink="/drinks"
+          class="btn btn-orange"
+          style="background-color: orange"
+        >
+          Drinks
+        </button>
+        <mat-divider></mat-divider>
+        <button
+          mat-menu-item
+          routerLink="/dashboard"
+          class="btn btn-orange"
+          style="background-color: orange"
+        >
+          Users
+        </button>
+      </mat-menu>
+
+      <button class="btn btn-orange-nav" routerLink="/burgerspage">
+        Order
+      </button>
+      <button class="btn btn-orange-nav logout-button" (click)="logout()">
+        Logout
+      </button>
+    </ng-container>
+
+    <ng-template #notLoggedIn>
+      <button
+        class="btn btn-orange-nav login-button"
+        (click)="openConnexionDialog()"
+      >
+        Connexion
+      </button>
+    </ng-template>
+  </div>
+</nav>

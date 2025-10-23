@@ -1,0 +1,98 @@
+/* ---- Barre de navigation ---- */
+.navbar {
+  display: flex;
+  align-items: center;
+  background-color: #007bff; /* bleu */
+  padding: 10px 20px;
+  width: 100%;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+}
+/* === Supprimer arrondis + marges du menu === */
+::ng-deep .mat-mdc-menu-panel,
+::ng-deep .mat-menu-panel {
+  border-radius: 0 !important; /* coins carrés */
+  margin: 0 !important;
+  padding: 0 !important;
+  min-width: 180px !important; /* largeur du menu (tu peux ajuster) */
+}
+
+/* === Faire occuper tout l’espace horizontal aux items === */
+::ng-deep .mat-mdc-menu-content,
+::ng-deep .mat-menu-content {
+  padding: 0 !important; /* supprime l’espace intérieur du conteneur */
+}
+
+/* === Boutons à l’intérieur du menu === */
+::ng-deep .mat-mdc-menu-item,
+::ng-deep .mat-menu-item {
+  border-radius: 0 !important; /* pas d’arrondi */
+  width: 100% !important; /* occupe toute la largeur */
+  margin: 0 !important;
+  padding: 12px 16px !important; /* hauteur + lisibilité */
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+}
+
+/* === Supprimer effet de débordement (focus/hover) === */
+::ng-deep .mat-mdc-menu-item:hover,
+::ng-deep .mat-menu-item:hover {
+  background-color: darkorange !important; /* survol */
+  color: #fff !important;
+}
+
+/* === Supprimer les petits espaces entre items (séparateurs facultatifs) === */
+::ng-deep .mat-mdc-menu-content .mat-divider,
+::ng-deep .mat-menu-content .mat-divider {
+  margin: 0 !important;
+}
+
+/* ---- Logo ---- */
+.logo-image {
+  height: 30px;
+  width: 30px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+/* ---- Boutons de la navbar ---- */
+.navbar-buttons {
+  display: flex;
+  justify-content: flex-end; /* tous les boutons à droite */
+  gap: 15px; /* espace entre les boutons */
+  width: 100%;
+  padding-right: 30px; /* espace entre le dernier bouton et le bord droit */
+}
+
+/* ---- Boutons orange ---- */
+.btn-orange {
+  background-color: orange;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.btn-orange-nav {
+  background-color: orange;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-orange:hover,
+.btn-orange-nav:hover {
+  background-color: darkorange;
+}
+
+.mat-menu-item {
+  font-size: 14px;
+}
