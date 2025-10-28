@@ -1,10 +1,10 @@
 import { Component, OnInit } from '@angular/core';
-import { CheckActivityService } from './core/services/check-activity.service';
-import { ColorService } from './core/services/color.service';
-import { CookieService } from './core/services/cookie.service';
 import { Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
+import { CookieService } from './core/services/cookie.service';
 import { AuthService } from './core/services/auth.service';
+import { ColorService } from './core/services/color.service';
+import { CheckActivityService } from './core/services/check-activity.service';
 
 @Component({
   selector: 'app-root',
@@ -13,7 +13,7 @@ import { AuthService } from './core/services/auth.service';
 })
 export class AppComponent implements OnInit {
   title = 'burgerManagementFrontend';
-  private ignoredRoutes: string[] = ['/'];
+  private ignoredRoutes: string[] = ['/login', '/logout', '/register', '/'];
 
   constructor(
     private checkActivityService: CheckActivityService,
@@ -24,86 +24,82 @@ export class AppComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    // 🕵️ Vérifie régulièrement si l'utilisateur est toujours actif
     this.checkActivityService.startChecking();
 
-    // ✅ Quand l’utilisateur est connecté, on charge directement sa couleur
-    const userEmail = this.authService.getUserEmail();
-    if (userEmail) {
-      this.loadUserColor();
-      this.loadLastVisitedPage(userEmail);
-      this.trackVisitedPages(userEmail);
-    }
-
-    // ✅ Écoute les changements d’état de connexion (si jamais login/logout change)
+    // 🧠 Surveille l’état de connexion de l’utilisateur
     this.authService.isAuthenticated$.subscribe((isAuthenticated) => {
-      if (isAuthenticated) {
-        // Si connexion → recharge la couleur du backend
+      const email = this.authService.getUserEmail();
+
+      if (isAuthenticated && email) {
         this.loadUserColor();
+        this.loadLastVisitedPage(email);
+        this.trackVisitedPages(); // ✅ Ne passe plus d'email ici
       } else {
-        // Si déconnexion → remet la couleur par défaut
+        // Si pas connecté, fond blanc
         this.colorService.applyColorToBody('#ffffff', true);
       }
     });
   }
 
-  /** 🔹 Récupère et applique la couleur de fond de l'utilisateur depuis le backend */
+  /** ------------------ COULEUR UTILISATEUR ------------------ **/
   private loadUserColor(): void {
     this.colorService.getColorServer().subscribe({
       next: (res) => {
-        if (res && res.color) {
-          this.colorService.applyColorToBody(res.color, true);
-        } else {
-          console.log('Aucune couleur trouvée pour cet utilisateur.');
-        }
+        if (res?.color) this.colorService.applyColorToBody(res.color, true);
       },
-      error: (err) => {
-        console.warn(
-          'Impossible de récupérer la couleur depuis le serveur :',
-          err
-        );
-      },
+      error: (err) =>
+        console.warn('Erreur lors du chargement de la couleur :', err),
     });
   }
 
-  /** 🔹 Charge la dernière page visitée de l'utilisateur connecté */
-  private loadLastVisitedPage(userEmail: string): void {
-    this.cookieService.getAllLastPageCookies().subscribe({
+  /** ------------------ CHARGEMENT DERNIÈRE PAGE ------------------ **/
+  private loadLastVisitedPage(email: string): void {
+    this.cookieService.getLastPage(email).subscribe({
       next: (res) => {
-        const cookieName = `lastPage_${encodeURIComponent(
-          userEmail.toLowerCase()
-        )}`;
-        const lastPage = res[cookieName] || '/burgerspage';
+        const lastPage = res?.lastPage || '/burgerspage';
 
         if (!this.isIgnoredRoute(lastPage) && lastPage !== this.router.url) {
+          console.log(`📦 Dernière page pour ${email} : ${lastPage}`);
           this.router.navigateByUrl(lastPage);
         }
       },
-      error: (err) => {
-        console.error('Erreur lors de la récupération des cookies :', err);
+      error: () => {
+        this.router.navigateByUrl('/burgerspage');
       },
     });
   }
 
-  /** 🔹 Enregistre les pages visitées de l’utilisateur connecté */
-  private trackVisitedPages(userEmail: string): void {
+  /** ------------------ TRACKING DE PAGE ------------------ **/
+  private trackVisitedPages(): void {
     this.router.events
-      .pipe(
-        filter(
-          (event): event is NavigationEnd => event instanceof NavigationEnd
-        )
-      )
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((event) => {
-        const lastPage = event.urlAfterRedirects;
-        if (!this.isIgnoredRoute(lastPage)) {
-          this.cookieService.setLastPage(lastPage, userEmail).subscribe({
+        const page = event.urlAfterRedirects;
+        const email = this.authService.getUserEmail(); // ✅ récupère dynamiquement l'utilisateur connecté
+
+        if (!email) {
+          console.log(
+            '🚫 Aucun utilisateur connecté — pas de sauvegarde de page.'
+          );
+          return;
+        }
+
+        if (!this.isIgnoredRoute(page)) {
+          console.log(`🧭 Sauvegarde de la page "${page}" pour ${email}`);
+
+          // ✅ Sauvegarde uniquement pour l'utilisateur actuellement connecté
+          this.cookieService.setLastPage(page, email).subscribe({
+            next: () =>
+              console.log(`✅ Cookie mis à jour pour ${email} → ${page}`),
             error: (err) =>
-              console.error('Erreur d’enregistrement de la page :', err),
+              console.error(`⚠️ Erreur sauvegarde page pour ${email}`, err),
           });
         }
       });
   }
 
-  /** 🔹 Vérifie si une route doit être ignorée */
+  /** ------------------ ROUTES À IGNORER ------------------ **/
   private isIgnoredRoute(route: string): boolean {
     const cleanRoute = route.split('?')[0].split('#')[0];
     return this.ignoredRoutes.includes(cleanRoute);

@@ -18,7 +18,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "mysqladmin ping -h localhost -u${DB_USER} -p${DB_PASSWORD}",
+          "mysqladmin ping -h localhost -uroot -p${DB_PASSWORD} || exit 1",
         ]
       interval: 10s
       timeout: 5s
@@ -26,29 +26,28 @@ services:
       start_period: 30s
 
   backend:
-    image: bdsdmiii/burgermanagement3-backend:latest
+    image: bdsdmiii/burgermanagement3-backend:latest # ← image depuis Docker Hub
     container_name: burger_backend
     restart: always
     env_file:
       - ./app.env
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      DB_HOST: db
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
-      DB_HOST: ${DB_HOST}
     ports:
       - "8080:8080"
     volumes:
       - backend_uploads:/app/uploads
 
   frontend:
-    image: bdsdmiii/burgermanagement3-frontend:latest
+    image: bdsdmiii/burgermanagement3-frontend:latest # ← image depuis Docker Hub
     container_name: burger_frontend
     restart: always
     depends_on:
-      backend:
-        condition: service_started
+      - backend
     ports:
       - "4200:80"
 

@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.*;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.Map;
 
 @CrossOrigin(origins = "http://localhost:4200", allowCredentials = "true")
@@ -19,26 +21,43 @@ public class LastPageController {
 
     private static final int ONE_YEAR_SECONDS = 365 * 24 * 60 * 60;
 
-    /** ✅ Crée ou met à jour le cookie de dernière page (lié à un utilisateur) */
+    // ✅ Memory store isolé par utilisateur
+    // Clé = email encodé, Valeur = page
+    private final Map<String, String> memoryStorePerUser = new HashMap<>();
+
+    /** Encodage email → Base64 URL-safe */
+    private String encodeEmailForCookie(String email) {
+        return Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(email.trim().toLowerCase().getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Créer ou mettre à jour le cookie lastPage_<encodedEmail> */
     @PostMapping("/last-page")
-    public ResponseEntity<?> setLastPage(@RequestBody Map<String, String> body, HttpServletResponse response) {
+    public ResponseEntity<Map<String, String>> setLastPage(
+            @RequestBody Map<String, String> body,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
         String page = body.get("page");
         String email = body.get("email");
 
-        if (page == null || page.trim().isEmpty()) {
-            System.out.println("[setLastPage] Page manquante");
-            return ResponseEntity.badRequest().body(Map.of("error", "Page missing"));
-        }
-        if (email == null || email.trim().isEmpty()) {
-            System.out.println("[setLastPage] Email manquant");
-            return ResponseEntity.badRequest().body(Map.of("error", "Email missing"));
+        if (page == null || email == null || email.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Page ou email manquant"));
         }
 
-        // Normalise et encode l’email
-        String encodedEmail = URLEncoder.encode(email.trim().toLowerCase(), StandardCharsets.UTF_8);
+        // 🔐 Encode l'email et construit le nom unique du cookie
+        String encodedEmail = encodeEmailForCookie(email);
         String cookieName = "lastPage_" + encodedEmail;
+        String encodedPage = URLEncoder.encode(page, StandardCharsets.UTF_8);
 
-        ResponseCookie rc = ResponseCookie.from(cookieName, URLEncoder.encode(page.trim(), StandardCharsets.UTF_8))
+        // ✅ Stockage mémoire uniquement pour cet utilisateur
+        memoryStorePerUser.put(encodedEmail, page);
+
+        // 🚫 Supprime explicitement les anciens Set-Cookie avant d’ajouter le tien
+        response.resetBuffer(); // empêche les anciens en-têtes d’être renvoyés
+
+        // ✅ Ajoute UNIQUEMENT le cookie de cet utilisateur
+        ResponseCookie cookie = ResponseCookie.from(cookieName, encodedPage)
                 .path("/")
                 .maxAge(ONE_YEAR_SECONDS)
                 .httpOnly(false)
@@ -46,51 +65,64 @@ public class LastPageController {
                 .sameSite("Lax")
                 .build();
 
-        response.addHeader(HttpHeaders.SET_COOKIE, rc.toString());
+        response.setHeader(HttpHeaders.SET_COOKIE, cookie.toString());
 
-        System.out.println("[setLastPage] Cookie créé/mis à jour : " + cookieName + " = " + page);
+        System.out.println("✅ Cookie mis à jour UNIQUEMENT pour " + email + " → " + page);
 
-        return ResponseEntity.ok(Map.of("lastPage", page));
+        return ResponseEntity.ok(Map.of(
+                "cookieName", cookieName,
+                "lastPage", page
+        ));
     }
 
-    /** ✅ Récupère la dernière page visitée pour un utilisateur donné */
+
+    /** Lire la dernière page pour un utilisateur */
     @GetMapping("/last-page")
-    public ResponseEntity<?> getLastPage(@RequestParam("email") String email, HttpServletRequest request) {
-        if (email == null || email.trim().isEmpty()) {
-            System.out.println("[getLastPage] Email manquant");
-            return ResponseEntity.badRequest().body(Map.of("error", "Email missing"));
+    public ResponseEntity<Map<String, String>> getLastPage(
+            @RequestParam("email") String email,
+            HttpServletRequest request
+    ) {
+        if (email == null || email.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email manquant"));
         }
 
-        String encodedEmail = URLEncoder.encode(email.trim().toLowerCase(), StandardCharsets.UTF_8);
+        String encodedEmail = encodeEmailForCookie(email);
         String cookieName = "lastPage_" + encodedEmail;
 
-        System.out.println("[getLastPage] Recherche du cookie : " + cookieName);
-
+        // 1️⃣ Vérifie le cookie navigateur
         if (request.getCookies() != null) {
-            for (jakarta.servlet.http.Cookie c : request.getCookies()) {
-                System.out.println("[getLastPage] Cookie trouvé : " + c.getName() + " = " + c.getValue());
-                if (cookieName.equals(c.getName())) {
-                    String decoded = URLDecoder.decode(c.getValue(), StandardCharsets.UTF_8);
-                    System.out.println("[getLastPage] Dernière page trouvée pour " + email + " : " + decoded);
+            for (var cookie : request.getCookies()) {
+                if (cookieName.equals(cookie.getName())) {
+                    String decoded = URLDecoder.decode(cookie.getValue(), StandardCharsets.UTF_8);
                     return ResponseEntity.ok(Map.of("lastPage", decoded));
                 }
             }
         }
 
-        System.out.println("[getLastPage] Aucun cookie trouvé pour " + email + ", valeur par défaut '/'");
+        // 2️⃣ Fallback mémoire spécifique à l'utilisateur
+        if (memoryStorePerUser.containsKey(encodedEmail)) {
+            return ResponseEntity.ok(Map.of("lastPage", memoryStorePerUser.get(encodedEmail)));
+        }
+
+        // 3️⃣ Par défaut
         return ResponseEntity.ok(Map.of("lastPage", "/"));
     }
 
-    /** ✅ Supprime le cookie de dernière page pour un utilisateur donné */
+    /** Supprimer le cookie pour un utilisateur spécifique */
     @DeleteMapping("/last-page")
-    public ResponseEntity<?> deleteLastPage(@RequestParam("email") String email, HttpServletResponse response) {
-        if (email == null || email.trim().isEmpty()) {
-            System.out.println("[deleteLastPage] Email manquant");
-            return ResponseEntity.badRequest().body(Map.of("error", "Email missing"));
+    public ResponseEntity<Map<String, String>> deleteLastPage(
+            @RequestParam String email,
+            HttpServletResponse response
+    ) {
+        if (email == null || email.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email manquant"));
         }
 
-        String encodedEmail = URLEncoder.encode(email.trim().toLowerCase(), StandardCharsets.UTF_8);
+        String encodedEmail = encodeEmailForCookie(email);
         String cookieName = "lastPage_" + encodedEmail;
+
+        // ✅ Supprime seulement ce cookie pour l'utilisateur
+        memoryStorePerUser.remove(encodedEmail);
 
         ResponseCookie rc = ResponseCookie.from(cookieName, "")
                 .path("/")
@@ -101,30 +133,30 @@ public class LastPageController {
                 .build();
 
         response.addHeader(HttpHeaders.SET_COOKIE, rc.toString());
-        System.out.println("[deleteLastPage] Cookie supprimé : " + cookieName);
 
-        return ResponseEntity.ok(Map.of("message", "lastPage deleted"));
+        return ResponseEntity.ok(Map.of("message", "Cookie supprimé avec succès"));
     }
 
-    /** ✅ Récupère tous les cookies lastPage existants */
+    /** Liste tous les cookies lastPage_* du navigateur */
     @GetMapping("/all-last-pages")
-    public ResponseEntity<?> getAllLastPages(HttpServletRequest request) {
-        if (request.getCookies() == null) {
-            System.out.println("[getAllLastPages] Aucun cookie trouvé");
-            return ResponseEntity.ok(Map.of()); // aucun cookie
-        }
+    public ResponseEntity<Map<String, String>> getAllLastPages(HttpServletRequest request) {
+        Map<String, String> cookiesMap = new HashMap<>();
 
-        Map<String, String> lastPages = new java.util.HashMap<>();
-
-        for (jakarta.servlet.http.Cookie c : request.getCookies()) {
-            if (c.getName().startsWith("lastPage_")) {
-                String decoded = URLDecoder.decode(c.getValue(), StandardCharsets.UTF_8);
-                lastPages.put(c.getName(), decoded);
-                System.out.println("[getAllLastPages] Cookie lastPage trouvé : " + c.getName() + " = " + decoded);
+        if (request.getCookies() != null) {
+            for (var cookie : request.getCookies()) {
+                if (cookie.getName().startsWith("lastPage_")) {
+                    String decoded = URLDecoder.decode(cookie.getValue(), StandardCharsets.UTF_8);
+                    cookiesMap.put(cookie.getName(), decoded);
+                }
             }
         }
 
-        return ResponseEntity.ok(lastPages);
-    }
+        // ✅ On ne renvoie que le fallback mémoire spécifique pour les cookies absents
+        memoryStorePerUser.forEach((encodedEmail, page) -> {
+            String cookieName = "lastPage_" + encodedEmail;
+            cookiesMap.putIfAbsent(cookieName, page);
+        });
 
+        return ResponseEntity.ok(cookiesMap);
+    }
 }
