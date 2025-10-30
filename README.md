@@ -41,4 +41,4 @@ for P in 3306 8080 4200; do
 done && \
 git clone https://github.com/BDSDM/burgerManagement3-dockerise.git && \
 cd burgerManagement3-dockerise && \
-docker compose up -d
+docker compose --env-file app.env up -d  
