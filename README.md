@@ -31,7 +31,7 @@ Restauration de la dernière page consultée à la reconnexion
 🪟 Sous Windows (CMD / PowerShell)
 
 ```cmd
-(for %P in (3306 8080 4200) do @for /f "tokens=1" %I in ('docker ps --format "{{.ID}} {{.Ports}}" ^| findstr ":%P"') do docker rm -f %I) & git clone https://github.com/BDSDM/burgerManagement3-dockerise.git && cd burgerManagement3-dockerise && docker compose up -d
+(for %P in (3306 8080 4200) do @for /f "tokens=1" %I in ('docker ps --format "{{.ID}} {{.Ports}}" ^| findstr ":%P"') do docker rm -f %I) & git clone https://github.com/BDSDM/burgerManagement3-dockerise.git && cd burgerManagement3-dockerise && docker compose --env-file app.env up -d
 ```
 🐧 Sous Linux / macOS (bash / zsh)
 
